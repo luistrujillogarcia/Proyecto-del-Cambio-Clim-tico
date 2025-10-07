@@ -3,6 +3,9 @@ from discord.ext import commands
 import requests
 import pyttsx3
 from googletrans import Translator
+import asyncio
+import matplotlib.pyplot as plt
+import os
 
 # Inicializar bot
 intents = discord.Intents.default()
@@ -19,20 +22,37 @@ def talk(text, voz_id=0):
     engine.say(text)
     engine.runAndWait()
 
-# Inicializar bot
-intents = discord.Intents.default()
-intents.message_content = True
-bot = commands.Bot(command_prefix="$", intents=intents)
-
 # Guardar voz actual (por defecto masculina)
 bot.voz_actual = 0
 
+# Voz
+@bot.command()
+async def voz(ctx, tipo: str):
+    if tipo.lower() == "masculina":
+        bot.voz_actual = 0
+        await ctx.send("✅ Voz cambiada a masculina")
+    elif tipo.lower() == "femenina":
+        bot.voz_actual = 1
+        await ctx.send("✅ Voz cambiada a femenina")
+    else:
+        await ctx.send("Por favor, elige 'masculina' o 'femenina'.")
+
+# Presentacíon
 @bot.command()
 async def hello(ctx):
     mensaje = "Hola, soy tu ingenioso asistente virtual, Llámame Norbot 🤖"
     await ctx.send(mensaje)
     talk(mensaje, bot.voz_actual)
 
+# Clima
+@bot.command()
+async def clima(ctx, *, ciudad: str):
+    prediccion = obtener_clima(ciudad)
+    mensaje = f"El clima en {ciudad} es: {prediccion}"
+    await ctx.send(mensaje)
+    talk(mensaje, bot.voz_actual)
+
+# Clima en las ciudades
 def obtener_clima(ciudad: str) -> str:
     url = f"https://wttr.in/{ciudad}?format=%C+%t&lang=es"
     respuesta = requests.get(url)
@@ -67,81 +87,114 @@ def obtener_temperatura(ciudad: str) -> float:
             return None
     except:
         return None
-# Clima
 
+# Información climática
 @bot.command()
-async def clima(ctx, *, ciudad: str):
-    prediccion = obtener_clima(ciudad)
-    mensaje = f"El clima en {ciudad} es: {prediccion}"
-    await ctx.send(mensaje)
-    talk(mensaje, bot.voz_actual)
+async def climainfo(ctx, *, ciudad: str = "el mundo"):
+    """
+    Muestra información sobre el clima y el cambio climático en una ciudad.
+    Si no se especifica ciudad, usa 'el mundo'.
+    """
+    try:
+        # --- Obtener clima actual desde wttr.in ---
+        url_clima = f"https://wttr.in/{ciudad}?format=%C+%t&lang=es"
+        respuesta = requests.get(url_clima, timeout=5)
+        if respuesta.status_code == 200:
+            clima = respuesta.text.strip()
+        else:
+            clima = "No se pudo obtener el clima actual."
 
-# Voz
+        # --- Obtener temperatura numérica ---
+        url_temp = f"https://wttr.in/{ciudad}?format=%t"
+        temp_res = requests.get(url_temp, timeout=5)
+        temperatura = temp_res.text.strip() if temp_res.status_code == 200 else "N/A"
 
+        # --- Obtener calidad del aire (API alternativa) ---
+        try:
+            url_air = f"https://api.waqi.info/feed/{ciudad}/?token=demo"
+            air_data = requests.get(url_air, timeout=5).json()
+            if air_data.get("status") == "ok":
+                aqi = air_data["data"]["aqi"]
+                if aqi <= 50:
+                    calidad = f"🌿 Buena ({aqi})"
+                elif aqi <= 100:
+                    calidad = f"🙂 Moderada ({aqi})"
+                elif aqi <= 150:
+                    calidad = f"😷 Dañina para sensibles ({aqi})"
+                else:
+                    calidad = f"☠️ Muy mala ({aqi})"
+            else:
+                calidad = "No disponible"
+        except:
+            calidad = "No disponible"
+
+        # --- Crear mensaje ---
+        mensaje = (
+            f"🌍 **Información sobre el clima en {ciudad.capitalize()}**\n"
+            f"- Condición: {clima}\n"
+            f"- Temperatura actual: {temperatura}\n"
+            f"- Calidad del aire: {calidad}\n\n"
+        )
+
+        await ctx.send(mensaje)
+
+        # Habla el resumen (solo parte del texto)
+        resumen = f"El clima en {ciudad} es {clima}. La calidad del aire es {calidad}."
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, talk, resumen, bot.voz_actual)
+
+    except Exception as e:
+        await ctx.send(f"⚠️ Error al obtener datos: {e}")
+
+# Consejos
 @bot.command()
-async def voz(ctx, tipo: str):
-    if tipo.lower() == "masculina":
-        bot.voz_actual = 0
-        await ctx.send("✅ Voz cambiada a masculina")
-    elif tipo.lower() == "femenina":
-        bot.voz_actual = 1
-        await ctx.send("✅ Voz cambiada a femenina")
+async def consejos(ctx, *, ciudad: str = "mundo"):
+    """
+    Muestra consejos para minimizar el cambio climático, una imagen y un gráfico de ejemplo.
+    """
+    # 1. Consejos (texto)
+    consejos_texto = (
+        "🌱 **Consejos para ayudar al planeta**:\n"
+        "- Reduce el uso del auto; usa transporte público o bicicleta.\n"
+        "- Apaga luces y desconecta aparatos cuando no los uses.\n"
+        "- Planta árboles o ayuda en reforestaciones.\n"
+        "- Reduce, reutiliza y recicla tus residuos.\n"
+        "- Consume menos carne y apoya productos locales.\n"
+    )
+    await ctx.send(consejos_texto)
+
+    # 2. Mostrar una imagen ilustrativa (usa una URL o un archivo local)
+    # Supongamos que tienes una carpeta "imagenes" con "climate_advice.jpg"
+    if os.path.exists("imagenes/climate_advice.jpg"):
+        await ctx.send(file=discord.File("imagenes/climate_advice.jpg"))
     else:
-        await ctx.send("Por favor, elige 'masculina' o 'femenina'.")
+        await ctx.send("No encontré imagen ilustrativa disponible.")
 
-# Hechos curiosos
+    # 3. Generar un gráfico simple ejemplo
+    # Por ejemplo: mostrar aumento de temperaturas promedio en los últimos años
+    años = [2000, 2005, 2010, 2015, 2020, 2025]
+    temp_promedio = [14.5, 14.7, 14.9, 15.2, 15.5, 15.7]  # ejemplo ficticio
 
-def obtener_hecho():
-    url = "https://uselessfacts.jsph.pl/random.json?language=en"
-    respuesta = requests.get(url)
-    if respuesta.status_code == 200:
-        return respuesta.json().get("text")
-    else:
-        return "No pude obtener un hecho curioso ahora mismo."
+    plt.figure(figsize=(6,4))
+    plt.plot(años, temp_promedio, marker='o', color='orange')
+    plt.title(f"Tendencia de temperatura global ({años[0]}-{años[-1]})")
+    plt.xlabel("Año")
+    plt.ylabel("Temperatura promedio (°C)")
+    plt.grid(True)
+    plt.tight_layout()
 
-@bot.command()
-async def ciencia(ctx):
-    hecho = obtener_hecho()
-    traductor = Translator()
-    hecho_traducido = traductor.translate(hecho, src="en", dest="es").text
-    mensaje = f"🔬 Dato de ciencia: {hecho_traducido}"
-    await ctx.send(mensaje)
-    talk(hecho_traducido, bot.voz_actual)
+    graf_nombre = "tendencia_temp.png"
+    plt.savefig(graf_nombre)
+    plt.close()
 
-@bot.command()
-async def historia(ctx):
-    hecho = obtener_hecho()
-    traductor = Translator()
-    hecho_traducido = traductor.translate(hecho, src="en", dest="es").text
-    mensaje = f"📜 Dato de historia: {hecho_traducido}"
-    await ctx.send(mensaje)
-    talk(hecho_traducido, bot.voz_actual)
+    # Enviar gráfico
+    await ctx.send(file=discord.File(graf_nombre))
 
-@bot.command()
-async def espacio(ctx):
-    hecho = obtener_hecho()
-    traductor = Translator()
-    hecho_traducido = traductor.translate(hecho, src="en", dest="es").text
-    mensaje = f"🌌 Dato del espacio: {hecho_traducido}"
-    await ctx.send(mensaje)
-    talk(hecho_traducido, bot.voz_actual)
-
-@bot.command()
-async def animales(ctx):
-    hecho = obtener_hecho()
-    traductor = Translator()
-    hecho_traducido = traductor.translate(hecho, src="en", dest="es").text
-    mensaje = f"🐾 Dato de animales: {hecho_traducido}"
-    await ctx.send(mensaje)
-    talk(hecho_traducido, bot.voz_actual)
-
-@bot.command()
-async def climainfo(ctx, *, ciudad: str):
-    mensaje = f"🌍 Información sobre cambio climático en {ciudad}:\n"
-    mensaje += "- Aumento promedio de temperatura: +1.2°C en los últimos 50 años.\n"
-    mensaje += "- Consejos: Reduce emisiones, usa transporte público, recicla."
-    await ctx.send(mensaje)
-    talk(mensaje, bot.voz_actual)
+    # Puedes limpiar el archivo si lo deseas
+    try:
+        os.remove(graf_nombre)
+    except:
+        pass
 
 #Quizz
 
@@ -207,7 +260,7 @@ async def quizclima(ctx):
         except:
             await ctx.send(f"⏰ Tiempo agotado! La respuesta correcta era: {pregunta['respuesta']}")
 
-    # Calificación final
+# Calificación final
     await ctx.send(f"Tu puntuación final es: {puntuacion}/{len(quiz)}")
     if puntuacion == len(quiz):
         await ctx.send("🌟 ¡Excelente! Sabes mucho sobre cambio climático.")
@@ -216,6 +269,50 @@ async def quizclima(ctx):
     else:
         await ctx.send("💡 No te desanimes. Repasa la información y vuelve a intentarlo.")
 
+# Hechos curiosos
+def obtener_hecho():
+    url = "https://uselessfacts.jsph.pl/random.json?language=en"
+    respuesta = requests.get(url)
+    if respuesta.status_code == 200:
+        return respuesta.json().get("text")
+    else:
+        return "No pude obtener un hecho curioso ahora mismo."
+
+@bot.command()
+async def ciencia(ctx):
+    hecho = obtener_hecho()
+    traductor = Translator()
+    hecho_traducido = traductor.translate(hecho, src="en", dest="es").text
+    mensaje = f"🔬 Dato de ciencia: {hecho_traducido}"
+    await ctx.send(mensaje)
+    talk(hecho_traducido, bot.voz_actual)
+
+@bot.command()
+async def historia(ctx):
+    hecho = obtener_hecho()
+    traductor = Translator()
+    hecho_traducido = traductor.translate(hecho, src="en", dest="es").text
+    mensaje = f"📜 Dato de historia: {hecho_traducido}"
+    await ctx.send(mensaje)
+    talk(hecho_traducido, bot.voz_actual)
+
+@bot.command()
+async def espacio(ctx):
+    hecho = obtener_hecho()
+    traductor = Translator()
+    hecho_traducido = traductor.translate(hecho, src="en", dest="es").text
+    mensaje = f"🌌 Dato del espacio: {hecho_traducido}"
+    await ctx.send(mensaje)
+    talk(hecho_traducido, bot.voz_actual)
+
+@bot.command()
+async def animales(ctx):
+    hecho = obtener_hecho()
+    traductor = Translator()
+    hecho_traducido = traductor.translate(hecho, src="en", dest="es").text
+    mensaje = f"🐾 Dato de animales: {hecho_traducido}"
+    await ctx.send(mensaje)
+    talk(hecho_traducido, bot.voz_actual)
 
 # Ejecutar el bot
 bot.run("Token")
