@@ -15,7 +15,7 @@ Comando de voz: El bot puede hablar usando diferentes voces (masculina o femenin
 
 Información del clima:
 - $clima [ciudad] → muestra la temperatura actual
-- $climainfo [ciudad] → ofrece información detallada (condiciones, calidad del aire, etc.)
+- $climainfo [ciudad] → información detallada (condiciones, calidad del aire, etc.)
 
 Educación sobre el cambio climático:
 - $enseñar → explica qué es el cambio climático y sus causas
@@ -23,7 +23,7 @@ Educación sobre el cambio climático:
 
 Consejos ecológicos:
 - $consejos → ofrece recomendaciones prácticas para reducir el impacto ambiental
-- Datos curiosos: $ciencia, $animales, $espacio, $historia → muestra curiosidades sobre distintos temas
+- Datos curiosos: $ciencia, $animales, $espacio → muestra curiosidades sobre distintos temas
 
 🎬 Demostración
 Puedes ver una demostración del bot en funcionamiento en los siguientes enlaces:
